@@ -9,6 +9,7 @@ In my configuraition file (which let's forget i put here earlier) there is a
 -> Lastly, the "TrustServerCertificate" which can be either true or false, but in my case is defined as true
 
 Also in the settings there are Jwt settings which include
+
 -> "Issuer" - who is responsible for tokens
 ->"Audience" - the recipient of the issuer (in my case its the same as the issuer and as shown during tutorials)
 ->"Key" - a random key which is safe 
