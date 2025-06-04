@@ -29,7 +29,7 @@ public class AccountsController : ControllerBase
     public async Task<IActionResult> Register([FromBody] CreateAccountDto newUser)
     {
         if (await _context.Account.AnyAsync(a => a.Username == newUser.Username))
-            return Conflict(new { message = "Username already exists." });
+            return Conflict(new { message = "Username already exists" });
 
         var employeeExists = await _context.Employee.AnyAsync(e => e.Id == newUser.EmployeeId);
         if (!employeeExists)
@@ -63,154 +63,80 @@ public class AccountsController : ControllerBase
         return Ok(accounts);
     }
 
-    //ADMIN GET SPECIFIC ACCOUNT
+    // GET SPECIFIC ACCOUNT
     [HttpGet("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]  
     public async Task<IActionResult> GetAccount(int id)
     {
+        bool isAdmin = User.IsInRole("Admin");
+        if (!isAdmin)
+        {
+            var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(username))
+                return Forbid();
+            var selfAccount = await _context.Account
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Username == username);
+
+            if (selfAccount == null || selfAccount.Id != id)
+            {
+                return Unauthorized();
+            }
+        }
         var user = await _context.Account
             .Where(a => a.Id == id)
-            .Select(a => new { a.Username, a.Password })
+            .Select(a => new 
+            { 
+                a.Username, 
+                a.Password 
+            })
             .FirstOrDefaultAsync();
+
         if (user == null)
-        {
-            return NotFound();
-        }
+            return NotFound(); 
+
         return Ok(user);
     }
+
     
-    //USER GET HIS INFO
-[HttpGet("me")]
-[Authorize]
-public async Task<IActionResult> GetAccount()
-{
-    var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-    if (string.IsNullOrEmpty(username))
-        return Unauthorized();
-
-    var account = await _context.Account
-        .Include(a => a.Employee)
-            .ThenInclude(e => e.Person)
-        .Include(a => a.Employee)
-            .ThenInclude(e => e.Position)
-        .Include(a => a.Role)
-        .FirstOrDefaultAsync(a => a.Username == username);
-
-    if (account == null)
-        return NotFound("Account not found.");
-    if (account.Employee == null)
-        return NotFound("Employee data not found.");
-    if (account.Employee.Person == null)
-        return NotFound("Employee data not found.");
-    if (account.Role == null)
-        return NotFound("Role data not found.");
-
-    var employeeDto = new EmployeeDto
-    {
-        Id = account.Employee.Id,
-        FullName = $"{account.Employee.Person.FirstName} {account.Employee.Person.MiddleName} {account.Employee.Person.LastName}",
-        Position = new PositionDto
-        {
-            Id = account.Employee.Position?.Id,
-            Name = account.Employee.Position?.Name,
-            MinExpYears = account.Employee.Position?.MinExpYears ?? 0
-        },
-        Person = new PersonDto
-        {
-            Id = account.Employee.Person.Id,
-            FirstName = account.Employee.Person.FirstName,
-            MiddleName = account.Employee.Person.MiddleName,
-            LastName = account.Employee.Person.LastName,
-            Email = account.Employee.Person.Email,
-            PhoneNumber = account.Employee.Person.PhoneNumber,
-            PassportNumber = account.Employee.Person.PassportNumber
-        }
-    };
-
-    var accountDto = new AccountDto
-    {
-        Id = account.Id,
-        Username = account.Username,
-        RoleName = account.Role.Name,
-        Employee = employeeDto
-    };
-
-    return Ok(accountDto);
-}
-
-[HttpPut("me")]
-[Authorize]
-public async Task<IActionResult> UpdateMyAccount(UpdateMyAccountDto dto)
-    { 
-        var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(username))
-            return Unauthorized();
-        var account = await _context.Account
-            .Include(a => a.Employee)
-            .ThenInclude(e => e.Person)
-            .FirstOrDefaultAsync(a => a.Username == username);
-        if (account == null)
-            return NotFound("Account not found");
-        if (account.Employee == null)
-            return NotFound("Employee not found for this account");
-        if (account.Employee.Person == null)
-            return NotFound("Employee data not found for this account");
-        if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != username)
-        { 
-            var conflict = await _context.Account
-                .AnyAsync(a => a.Username == dto.Username && a.Id != account.Id);
-            if (conflict)
-                return BadRequest("Username already taken.");
-            account.Username = dto.Username;
-        }
-        if (!string.IsNullOrWhiteSpace(dto.Password))
-        { 
-            account.Password = _passwordHasher.HashPassword(account, dto.Password);
-        }
-        var person = account.Employee.Person;
-        if (!string.IsNullOrWhiteSpace(dto.FirstName))
-            person.FirstName = dto.FirstName;
-        if (!string.IsNullOrWhiteSpace(dto.MiddleName))
-            person.MiddleName = dto.MiddleName;
-        if (!string.IsNullOrWhiteSpace(dto.LastName))
-            person.LastName = dto.LastName;
-        if (!string.IsNullOrWhiteSpace(dto.Email))
-            person.Email = dto.Email;
-        if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) 
-            person.PhoneNumber = dto.PhoneNumber;
-        if (!string.IsNullOrWhiteSpace(dto.PassportNumber))
-            person.PassportNumber = dto.PassportNumber;
-        await _context.SaveChangesAsync();
-        return NoContent();
-        }
-
-    //ADMIN UPDATE ACCOUNT
+// UPDATE ACCOUNT
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<IActionResult> UpdateAccount(int id, UpdateAccountDto dto)
     {
-        var account = await _context.Account.FindAsync(id);
-        if (account == null)
+        var isAdmin = User.IsInRole("Admin");
+        if (!isAdmin)
+        {
+            var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(username))
+                return Forbid();
+            var account = await _context.Account.FirstOrDefaultAsync(a => a.Username == username);
+            if (account == null || account.Id != id)
+                return Unauthorized();
+        }
+        var acc = await _context.Account.FindAsync(id);
+        if (acc == null)
             return NotFound();
 
-        if (account.Username != dto.Username)
+        if (acc.Username != dto.Username)
         {
             if (await _context.Account.AnyAsync(a => a.Username == dto.Username && a.Id != id))
                 return BadRequest("Username already exists");
-
-            account.Username = dto.Username;
+            acc.Username = dto.Username;
         }
 
         if (!string.IsNullOrEmpty(dto.Password))
-            account.Password = _passwordHasher.HashPassword(account, dto.Password);
+            acc.Password = _passwordHasher.HashPassword(acc, dto.Password);
 
-        var role = await _context.Role.FindAsync(dto.RoleId);
-        if (role == null)
-            return BadRequest("Role does not exist");
+        if (isAdmin)
+        {
+            var role = await _context.Role.FindAsync(dto.RoleId);
+            if (role == null)
+                return BadRequest("Role does not exist");
+            acc.RoleId = dto.RoleId;
+        }
 
-        account.RoleId = dto.RoleId;
-
-        _context.Account.Update(account);
+        _context.Account.Update(acc);
         await _context.SaveChangesAsync();
 
         return NoContent();
