@@ -7,7 +7,7 @@ using WebApplication1.Tokens;
 
 namespace WebApplication1;
 
-[Route("api/[controller]")]
+[Route("api/auth")]
 [ApiController]
 public class AuthController : ControllerBase
 {

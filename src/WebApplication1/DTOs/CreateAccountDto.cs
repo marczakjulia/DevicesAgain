@@ -1,17 +1,17 @@
 using System.ComponentModel.DataAnnotations;
-using WebApplication1.Validation;
+
 
 namespace WebApplication1.DTOs;
 
 public class CreateAccountDto
 {
     [Required]
-    [UsernameNotStartWithNumber]
-    public string Username { get; set; }
+    [RegularExpression(@"^[^\d].*", ErrorMessage = "Username must not start with a number.")]
+    public required string Username { get; set; }
 
     [Required]
-    [PasswordComplexity]
-    public string Password { get; set; }
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z\\d]).{12,}$", ErrorMessage = "Password must be at least 12 characters long and contain at least one lowercase letter, one uppercase letter, one digit, and one symbol.")]
+    public required string Password { get; set; }
 
     [Required]
     public int EmployeeId { get; set; }

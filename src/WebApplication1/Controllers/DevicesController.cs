@@ -1,4 +1,3 @@
-
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +10,7 @@ using WebApplication1.Models;
 namespace WebApplication1.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/devices")]
     public class DevicesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -174,9 +173,7 @@ namespace WebApplication1.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateDevice(
-            [FromBody] CreateDevice dev,
-            CancellationToken cancellationToken)
+        public async Task<IActionResult> CreateDevice([FromBody] CreateDevice dev, CancellationToken cancellationToken)
         {
             try
             {
@@ -219,10 +216,7 @@ namespace WebApplication1.Controllers
         
         [HttpPut("{id:int}")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateDevice(
-            int id,
-            [FromBody] CreateDevice dev,
-            CancellationToken cancellationToken)
+        public async Task<IActionResult> UpdateDevice(int id, [FromBody] CreateDevice dev, CancellationToken cancellationToken)
         {
             try
             {
