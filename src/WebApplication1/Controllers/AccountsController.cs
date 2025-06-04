@@ -21,6 +21,8 @@ public class AccountsController : ControllerBase
         _context = context;
     }
 
+    //sir from what i understand "Only admins can create, update and delete any accounts"
+    //hence this is why i only have one register function which is for the admin
     //ADMIN - CREATE ACCOUNT 
     [HttpPost]
     [Authorize(Roles = "Admin")]
@@ -35,10 +37,10 @@ public class AccountsController : ControllerBase
 
         var user = new Account
         {
-            Username   = newUser.Username,
-            Password   = string.Empty, 
+            Username = newUser.Username,
+            Password = string.Empty, 
             EmployeeId = newUser.EmployeeId,
-            RoleId     = 1 
+            RoleId = 2 //i am automatically making every user a user, not an admit. this can be latered altered by updating
         };
         user.Password = _passwordHasher.HashPassword(user, newUser.Password);
         _context.Account.Add(user);
@@ -77,37 +79,14 @@ public class AccountsController : ControllerBase
         return Ok(user);
     }
     
-    // Endpoint for users to get their own personal information
-    [HttpGet("me/personal")]
-    [Authorize(Roles = "User,Admin")]
-    public async Task<IActionResult> GetMyPersonalInfo()
-    {
-        var username = User.Identity.Name;
-        var account = await _context.Account.Include(a => a.Employee)
-            .ThenInclude(e => e.Person)
-            .FirstOrDefaultAsync(a => a.Username == username);
-        if (account?.Employee?.Person == null)
-            return NotFound();
-        var person = account.Employee.Person;
-        return Ok(new {
-            person.FirstName,
-            person.MiddleName,
-            person.LastName,
-            person.PassportNumber,
-            person.PhoneNumber,
-            person.Email
-        });
-    }
-    
     //USER GET HIS INFO
 [HttpGet("me")]
 [Authorize]
 public async Task<IActionResult> GetAccount()
 {
-    // Instead of User.Identity.Name, pull the NameIdentifier claim exactly as before:
     var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     if (string.IsNullOrEmpty(username))
-        return Unauthorized(new { message = "Token is missing the NameIdentifier claim." });
+        return Unauthorized();
 
     var account = await _context.Account
         .Include(a => a.Employee)
@@ -119,41 +98,38 @@ public async Task<IActionResult> GetAccount()
 
     if (account == null)
         return NotFound("Account not found.");
-
     if (account.Employee == null)
         return NotFound("Employee data not found.");
-
     if (account.Employee.Person == null)
-        return NotFound("Employee personal data not found.");
-
+        return NotFound("Employee data not found.");
     if (account.Role == null)
         return NotFound("Role data not found.");
 
     var employeeDto = new EmployeeDto
     {
-        Id        = account.Employee.Id,
-        FullName  = $"{account.Employee.Person.FirstName} {account.Employee.Person.MiddleName} {account.Employee.Person.LastName}",
-        Position  = new PositionDto
+        Id = account.Employee.Id,
+        FullName = $"{account.Employee.Person.FirstName} {account.Employee.Person.MiddleName} {account.Employee.Person.LastName}",
+        Position = new PositionDto
         {
-            Id          = account.Employee.Position?.Id,
-            Name        = account.Employee.Position?.Name,
+            Id = account.Employee.Position?.Id,
+            Name = account.Employee.Position?.Name,
             MinExpYears = account.Employee.Position?.MinExpYears ?? 0
         },
-        Person    = new PersonDto
+        Person = new PersonDto
         {
-            Id             = account.Employee.Person.Id,
-            FirstName      = account.Employee.Person.FirstName,
-            MiddleName     = account.Employee.Person.MiddleName,
-            LastName       = account.Employee.Person.LastName,
-            Email          = account.Employee.Person.Email,
-            PhoneNumber    = account.Employee.Person.PhoneNumber,
+            Id = account.Employee.Person.Id,
+            FirstName = account.Employee.Person.FirstName,
+            MiddleName = account.Employee.Person.MiddleName,
+            LastName = account.Employee.Person.LastName,
+            Email = account.Employee.Person.Email,
+            PhoneNumber = account.Employee.Person.PhoneNumber,
             PassportNumber = account.Employee.Person.PassportNumber
         }
     };
 
     var accountDto = new AccountDto
     {
-        Id       = account.Id,
+        Id = account.Id,
         Username = account.Username,
         RoleName = account.Role.Name,
         Employee = employeeDto
@@ -162,24 +138,23 @@ public async Task<IActionResult> GetAccount()
     return Ok(accountDto);
 }
 
-
-[HttpPut("myself")]
+[HttpPut("me")]
 [Authorize]
 public async Task<IActionResult> UpdateMyAccount(UpdateMyAccountDto dto)
     { 
         var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(username))
-            return Unauthorized(new { message = "Token is missing the NameIdentifier claim." });
+            return Unauthorized();
         var account = await _context.Account
             .Include(a => a.Employee)
             .ThenInclude(e => e.Person)
             .FirstOrDefaultAsync(a => a.Username == username);
         if (account == null)
-            return NotFound("Account not found.");
+            return NotFound("Account not found");
         if (account.Employee == null)
-            return NotFound("Employee data not found for this account.");
+            return NotFound("Employee not found for this account");
         if (account.Employee.Person == null)
-            return NotFound("Employee personal data not found for this account.");
+            return NotFound("Employee data not found for this account");
         if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != username)
         { 
             var conflict = await _context.Account
@@ -221,7 +196,7 @@ public async Task<IActionResult> UpdateMyAccount(UpdateMyAccountDto dto)
         if (account.Username != dto.Username)
         {
             if (await _context.Account.AnyAsync(a => a.Username == dto.Username && a.Id != id))
-                return BadRequest("Username already exists.");
+                return BadRequest("Username already exists");
 
             account.Username = dto.Username;
         }
@@ -231,7 +206,7 @@ public async Task<IActionResult> UpdateMyAccount(UpdateMyAccountDto dto)
 
         var role = await _context.Role.FindAsync(dto.RoleId);
         if (role == null)
-            return BadRequest("Role does not exist.");
+            return BadRequest("Role does not exist");
 
         account.RoleId = dto.RoleId;
 
@@ -257,6 +232,7 @@ public async Task<IActionResult> UpdateMyAccount(UpdateMyAccountDto dto)
 
         return NoContent();
     }
+    
     
 }
 

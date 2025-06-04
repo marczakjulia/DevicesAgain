@@ -1,6 +1,6 @@
 namespace WebApplication1.DTOs;
 
-public class TokenResponseDto
+public class TokenReposndeDto
 {
-    
+    public string AccessToken { get; set; }
 }

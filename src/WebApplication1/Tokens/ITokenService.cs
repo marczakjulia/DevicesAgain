@@ -1,6 +1,6 @@
 namespace WebApplication1.Tokens;
 
-public class ITokenService
+public interface ITokenService
 {
-    
+    string GenerateToken(string username, string role);
 }

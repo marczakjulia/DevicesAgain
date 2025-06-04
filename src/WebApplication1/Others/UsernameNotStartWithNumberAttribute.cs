@@ -11,7 +11,7 @@ namespace WebApplication1.Validation
             {
                 if (!string.IsNullOrEmpty(username) && char.IsDigit(username[0]))
                 {
-                    return new ValidationResult("Username must not start with a number.");
+                    return new ValidationResult("Username must not start with a number");
                 }
             }
             return ValidationResult.Success;
