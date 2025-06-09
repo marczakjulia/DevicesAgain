@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using WebApplication1.DTO;
 using WebApplication1.DTOs;
 using WebApplication1.Models;
+using Microsoft.Extensions.Logging;
 
 namespace WebApplication1.Controllers
 {
@@ -14,10 +15,12 @@ namespace WebApplication1.Controllers
     public class DevicesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<DevicesController> _logger;
 
-        public DevicesController(ApplicationDbContext context)
+        public DevicesController(ApplicationDbContext context, ILogger<DevicesController> logger)
         {
             _context = context;
+            _logger = logger;
         }
         [HttpGet]
         [Authorize(Roles = "Admin")]
@@ -25,8 +28,26 @@ namespace WebApplication1.Controllers
         {
             try
             {
+                _logger.LogInformation("Getting all devices");
                 var devices = await _context.Device
                     .Select(d => new DeviceDto(d.Id, d.Name))
+                    .ToListAsync(cancellationToken);
+
+                return Ok(devices);
+            }
+            catch (Exception ex)
+            {
+                return Problem(ex.Message);
+            }
+        }
+        [HttpGet("types")]
+        public async Task<IActionResult> GetAllDevicesTypes(CancellationToken cancellationToken)
+        {
+            try
+            {
+                _logger.LogInformation("Getting all devices types");
+                var devices = await _context.DeviceType
+                    .Select(d => new DeviceTypeDto(d.Id, d.Name))
                     .ToListAsync(cancellationToken);
 
                 return Ok(devices);
@@ -41,6 +62,7 @@ namespace WebApplication1.Controllers
         [Authorize]
         public async Task<IActionResult> GetDeviceById(int id, CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Getting device by id");
             var isAdmin = User.IsInRole("Admin");
             int? employeeId = null;
             if (!isAdmin)
@@ -61,42 +83,26 @@ namespace WebApplication1.Controllers
             {
                 var device = await _context.Device
                     .Include(d => d.DeviceType)
-                    .Include(d => d.DeviceEmployees)
-                        .ThenInclude(de => de.Employee)
-                            .ThenInclude(e => e.Person)
                     .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
                 if (device == null)
+                {
+                    _logger.LogWarning("Device {id} not found", id);
                     return NotFound($"Device {id} not found");
-                var additionalJson = JsonDocument.Parse(device.AdditionalProperties ?? "{}")
-                                                .RootElement;
-                var currentAssignment = device.DeviceEmployees
-                    .FirstOrDefault(de => de.ReturnDate == null);
-
-                CurrentUserDTO? currentUser = null;
-                if (currentAssignment != null && currentAssignment.Employee?.Person != null)
-                {
-                    var person = currentAssignment.Employee.Person;
-                    currentUser = new CurrentUserDTO
-                    {
-                        Id = currentAssignment.EmployeeId,
-                        Name = $"{person.FirstName} {person.LastName}"
-                    };
                 }
-
-                var dto = new DeviceDtoById
+                var additionalJson = JsonDocument.Parse(device.AdditionalProperties ?? "{}").RootElement;
+                var result = new
                 {
-                    Name = device.Name,
-                    DeviceTypeName = device.DeviceType!.Name,
-                    IsEnabled = device.IsEnabled,
-                    AdditionalProperties = additionalJson,
-                    Employee = currentUser
+                    name = device.Name,
+                    isEnabled = device.IsEnabled,
+                    additionalProperties = additionalJson,
+                    type = device.DeviceType?.Name
                 };
-
-                return Ok(dto);
+                return Ok(result);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error occurred in GetDeviceById");
                 return Problem(ex.Message);
             }
         }
@@ -107,13 +113,14 @@ namespace WebApplication1.Controllers
         {
             try
             {
+                _logger.LogInformation("Creating new device");
                 if (dev.AdditionalProperties.ValueKind == JsonValueKind.Null)
                     return BadRequest("AdditionalProperties cannot be null");
                 var type = await _context.DeviceType
-                    .SingleOrDefaultAsync(t => t.Name == dev.DeviceTypeName, cancellationToken);
+                    .SingleOrDefaultAsync(t => t.Id == dev.TypeId, cancellationToken);
 
                 if (type == null)
-                    return BadRequest($"Unknown device type '{dev.DeviceTypeName};");
+                    return BadRequest($"Unknown device type id '{dev.TypeId}'");
 
                 var device = new Device
                 {
@@ -129,17 +136,19 @@ namespace WebApplication1.Controllers
                 {
                     id = device.Id,
                     name = device.Name,
-                    deviceTypeName = type.Name,
                     isEnabled = device.IsEnabled,
                     additionalProperties = JsonDocument
                                             .Parse(device.AdditionalProperties ?? "{}")
-                                            .RootElement
+                                            .RootElement,
+                    typeId = type.Id
                 };
+                _logger.LogInformation("Created device");
 
                 return Created($"/api/devices/{device.Id}", returnedDto);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error occurred in CreateDevice");
                 return Problem(ex.Message);
             }
         }
@@ -148,6 +157,7 @@ namespace WebApplication1.Controllers
         [Authorize]
         public async Task<IActionResult> UpdateDevice(int id, [FromBody] CreateDevice dev, CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Updating device");
             var isAdmin = User.IsInRole("Admin");
             int? employeeId = null;
             if (!isAdmin)
@@ -171,9 +181,9 @@ namespace WebApplication1.Controllers
                     return NotFound($"Device {id} not found");
 
                 var type = await _context.DeviceType
-                    .SingleOrDefaultAsync(t => t.Name == dev.DeviceTypeName, cancellationToken);
+                    .SingleOrDefaultAsync(t => t.Id == dev.TypeId, cancellationToken);
                 if (type == null)
-                    return BadRequest($"Unknown device type '{dev.DeviceTypeName}'");
+                    return BadRequest($"Unknown device type id '{dev.TypeId}'");
 
                 device.Name = dev.Name;
                 device.DeviceTypeId = type.Id;
@@ -181,10 +191,12 @@ namespace WebApplication1.Controllers
                 device.AdditionalProperties = dev.AdditionalProperties.GetRawText();
 
                 await _context.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("Updated device");
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error occurred in UpdateDevice");
                 return Problem(ex.Message);
             }
         }
@@ -195,6 +207,7 @@ namespace WebApplication1.Controllers
         {
             try
             {
+                _logger.LogInformation("Deleting device");
                 var device = await _context.Device.FindAsync(new object[] { id }, cancellationToken);
                 if (device == null)
                     return NotFound($"Device {id} not found");
@@ -205,12 +218,16 @@ namespace WebApplication1.Controllers
                     return BadRequest($"Cannot delete device {id} because it is associated with an employee");
                 _context.Device.Remove(device);
                 await _context.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("Deleted device");
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error occurred in DeleteDevice");
                 return Problem(detail: ex.Message);
             }
         }
+
+        
     }
 }

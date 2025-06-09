@@ -18,4 +18,7 @@ public class CreateAccountDto
 
     [Required]
     public int EmployeeId { get; set; }
+    
+    [Required]
+    public int RoleId { get; set; }
 }

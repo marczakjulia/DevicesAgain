@@ -45,6 +45,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseMiddleware<DeviceAdditionalPropertiesValidationMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 
